@@ -1,12 +1,17 @@
-CFLAGS = -Wall -pedantic -std=c99
+CFLAGS = -Wall -pedantic -std=gnu99
 LDFLAGS = -lm
 
-# CFLAGS += -ggdb
+CFLAGS += -ggdb
 
 DEP = build/
 DEPFLAGS = -MT $@ -MMD -MP -MF $(DEP)/$*.d
 
-EXE = conv
+# https://stackoverflow.com/a/12099167
+ifeq ($(OS),Windows_NT)
+	EXE = conv.exe
+else
+	EXE = conv
+endif
 
 SRCFILES = main.c
 
@@ -22,13 +27,13 @@ build:
 	mkdir build
 
 .PHONY: full
-full: clean micg
+full: clean $(EXE)
 
 .PHONY: clean
 clean:
 	rm -fv $(OBJFILES)
 	rm -frv build
-	rm -fv $(EXE) micg.*
+	rm -fv $(EXE)
 
 DEPFILES := $(OBJFILES:%.o=%.d)
 include $(wildcard $(DEPFILES))
