@@ -72,7 +72,7 @@ struct {
 } buffer;
 
 unsigned int write_size = 0;
-void jpeg_write_callback(void* context, void* data, int size) { // TODO: also write to a buffer
+void jpeg_write_callback(void* context, void* data, int size) {
 	if (fwrite(data, 1, size, context) != size) {
 		fprintf(stderr, "error writing jpeg to file\n");
 	}
@@ -210,7 +210,7 @@ int main(int argc, char** argv) {
 	}
 
 	unsigned int i = 0;
-	while (/*!feof(fp)*/ i < 10 /*1*/) {
+	while (/*!feof(fp)*/ /*i < 10*/ 1) {
 		{
 			size_t s = fread(image, 3, out_width * out_height, fp);
 			if (s != out_width * out_height) {
@@ -237,6 +237,18 @@ int main(int argc, char** argv) {
 				fprintf(stderr, "error chunk type\n");
 				goto fail;
 			}
+		}
+
+		// write chunk size placeholder
+		unsigned int file_chunk_size = 0;
+		if (fwrite(&file_chunk_size, 4, 1, outfp) != 1) {
+			// TODO: error message
+			goto fail;
+		}
+		long file_chunk_size_pos = ftell(outfp);
+		if (file_chunk_size_pos < 0) {
+			// TODO: error message
+			goto fail;
 		}
 
 		for (unsigned int y = 0; y < out_height / CHUNK_SIZE; y++) {
@@ -284,6 +296,18 @@ int main(int argc, char** argv) {
 		}
 
 		{
+			long size_pos = ftell(outfp);
+			if (size_pos < 0) {
+				fprintf(stderr, "ftell failed for delta size\n");
+				goto fail;
+			}
+
+			unsigned int d_size = 0;
+			if (fwrite(&d_size, 4, 1, outfp) != 1) {
+				fprintf(stderr, "error writing delta size placeholder\n");
+				goto fail;
+			}
+
 			int width, height, channels;
 
 			uint8_t* d_image = stbi_load_from_memory(buffer.buffer, buffer.size, &width, &height, &channels, 3);
@@ -308,19 +332,18 @@ int main(int argc, char** argv) {
 
 					int value = 0;
 					if (d_val + (offset[x + y * out_width] << 4) < a_val) {
-						// TODO: write to file
-						if (x < 100) {
-							printf("1");
-						}
+						// if (x < 100) {
+						// 	printf("1");
+						// }
 
 						if (offset[x + y * out_width] < 0xF) {
 							offset[x + y * out_width]++;
 						}
 						value = 1;
 					} else {
-						if (x < 100) {
-							printf("0");
-						}
+						// if (x < 100) {
+						// 	printf("0");
+						// }
 
 						if (offset[x + y * out_width] > 0) {
 							offset[x + y * out_width]--;
@@ -332,7 +355,7 @@ int main(int argc, char** argv) {
 						if (amount > 0) {
 							if (write_rle(outfp, value, amount) == 0) {
 								goto fail; // it has already printed an error message
-							}
+							} d_size++;
 						}
 						last = value;
 						amount = 0;
@@ -340,14 +363,27 @@ int main(int argc, char** argv) {
 					if (amount == 127) {
 						if (write_rle(outfp, value, amount) == 0) {
 							goto fail; // it has already printed an error message
-						}
+						} d_size++;
 						amount = 0;
 					}
 				}
-				printf("\n");
+				// printf("\n");
 			}
 
 			stbi_image_free(d_image);
+
+			if (fseek(outfp, size_pos, SEEK_SET) != 0) {
+				fprintf(stderr, "fseek failed for delta size\n");
+				goto fail;
+			}
+			if (fwrite(&d_size, 4, 1, outfp) != 1) {
+				fprintf(stderr, "writing delta size failed\n");
+				goto fail;
+			}
+			if (fseek(outfp, 0, SEEK_END) != 0) {
+				fprintf(stderr, "seeking from delta size to end failed\n");
+				goto fail;
+			}
 		}
 
 		// {
@@ -379,7 +415,7 @@ int main(int argc, char** argv) {
 
 	goto not_fail;
     fail:
-	failed = 1;
+	failed = 1; // TODO: print strerr
 	goto defer;
     not_fail:
 	failed = 0;
